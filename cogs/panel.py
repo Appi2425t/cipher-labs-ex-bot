@@ -114,11 +114,11 @@ class ExchangeSelect(ui.Select):
     def __init__(self, bot):
         self.bot = bot
         options = [
-            discord.SelectOption(label="INR → Crypto (I2C)", value="i2c", emoji="💸"),
-            discord.SelectOption(label="Crypto → INR (C2I)", value="c2i", emoji="💰"),
-            discord.SelectOption(label="Crypto → Crypto (C2C)", value="c2c", emoji="🔄"),
+            discord.SelectOption(label="INR 2 Crypto", value="i2c", emoji="💸", description="Pay with INR, receive crypto"),
+            discord.SelectOption(label="Crypto 2 INR", value="c2i", emoji="💰", description="Send crypto, receive INR"),
+            discord.SelectOption(label="Crypto 2 Crypto", value="c2c", emoji="🔄", description="Swap one crypto for another"),
         ]
-        super().__init__(placeholder="Select exchange type...", options=options, custom_id="panel:exchange_select")
+        super().__init__(placeholder="Select exchange type to open a ticket...", options=options, custom_id="panel:exchange_select")
 
     async def callback(self, interaction: discord.Interaction):
         value = self.values[0]
@@ -157,10 +157,15 @@ class SupportSelect(ui.Select):
 # --- Panel Creation Modals ---
 
 class CreateExchangePanelModal(ui.Modal, title="Create Exchange Panel"):
-    panel_title = ui.TextInput(label="Panel Title", default="💱 Cipher Labs", required=True)
-    description = ui.TextInput(label="Description", style=discord.TextStyle.paragraph, default="Select an exchange type below to open a ticket.", required=True)
-    color = ui.TextInput(label="Color (hex)", default="#3498db", required=False)
-    footer = ui.TextInput(label="Footer Text", default="Cipher Labs", required=False)
+    panel_title = ui.TextInput(label="Panel Title", default="🌸 CIPHER LABS 🌸", required=True)
+    description = ui.TextInput(
+        label="Description",
+        style=discord.TextStyle.paragraph,
+        default="₹ **INR 2 CRYPTO**\n> 103.0/$ Any Amount\n\n🪙 **CRYPTO 2 INR**\n> 99/$ for Below $100\n> 100/$ for Above $100\n\n🪙 **CRYPTO 2 CRYPTO**\n> 3.0% fee + transaction fees\n\nRead our rules before proceeding.\nFixed rates. No negotiations.\n\n**TRUSTED & SAFE SERVICE**",
+        required=True
+    )
+    color = ui.TextInput(label="Color (hex)", default="#f1c40f", required=False)
+    footer = ui.TextInput(label="Footer Text", default="Cipher Labs • Trusted Exchange", required=False)
 
     def __init__(self, bot):
         super().__init__()
@@ -242,6 +247,54 @@ class PanelCog(commands.Cog):
             await ctx.send("❌ Admin only.")
             return
         await ctx.send("Opening panel creation modal... Please use the button below.", view=CreateExchangeButtonView(self.bot))
+
+    @panel.command(name="exchange")
+    async def quick_exchange(self, ctx: commands.Context, channel: discord.TextChannel = None):
+        """Quickly post the exchange panel with rates to a channel."""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+
+        target = channel or ctx.channel
+        rate_i2c = config.get("rate_i2c") or 101
+        rate_c2i_below = config.get("rate_c2i_below") or 97.5
+        rate_c2i_above = config.get("rate_c2i_above") or 98.5
+        rate_c2c = config.get("rate_c2c") or 100
+        c2c_fee = round(100 - rate_c2c, 1)
+
+        description = (
+            f"₹ **INR 2 CRYPTO**\n"
+            f"> {rate_i2c}/$ Any Amount\n\n"
+            f"🪙 **CRYPTO 2 INR**\n"
+            f"> {rate_c2i_below}/$ for Below $100\n"
+            f"> {rate_c2i_above}/$ for Above $100\n\n"
+            f"🪙 **CRYPTO 2 CRYPTO**\n"
+            f"> {c2c_fee}% fee + transaction fees\n\n"
+            f"Read our rules before proceeding.\n"
+            f"Fixed rates. No negotiations.\n\n"
+            f"**TRUSTED & SAFE SERVICE**"
+        )
+
+        embed = discord.Embed(
+            title="🌸 CIPHER LABS 🌸",
+            description=description,
+            color=0xf1c40f
+        )
+        embed.set_footer(text="Cipher Labs • Trusted Exchange")
+
+        view = ExchangePanelView(self.bot)
+        msg = await target.send(embed=embed, view=view)
+
+        await self.bot.db.create_panel(
+            ctx.guild.id, target.id, msg.id,
+            "🌸 CIPHER LABS 🌸", description, 0xf1c40f,
+            "Cipher Labs • Trusted Exchange", None, "exchange"
+        )
+        if target != ctx.channel:
+            await ctx.send(f"✅ Exchange panel posted in {target.mention}")
+        else:
+            await ctx.message.delete()
 
     @panel.command(name="create-support")
     async def create_support(self, ctx: commands.Context):

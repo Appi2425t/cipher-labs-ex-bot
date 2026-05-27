@@ -48,6 +48,51 @@ class AdminCog(commands.Cog):
         embed.set_footer(text="Cipher Labs")
         await ctx.send(embed=embed)
 
+    @commands.command(name="clist")
+    async def clist(self, ctx: commands.Context):
+        """Lists all available bot commands dynamically."""
+        embed = discord.Embed(
+            title="📜 All Available Commands",
+            description="Here's every command registered in the bot:",
+            color=discord.Color.purple()
+        )
+
+        # Group commands by cog
+        cog_commands = {}
+        for cmd in sorted(self.bot.commands, key=lambda c: c.qualified_name):
+            cog_name = cmd.cog_name or "General"
+            if cog_name not in cog_commands:
+                cog_commands[cog_name] = []
+            # Add the command
+            cog_commands[cog_name].append(f"`.{cmd.qualified_name}`")
+            # If it's a group, add subcommands
+            if isinstance(cmd, commands.Group):
+                for sub in sorted(cmd.commands, key=lambda c: c.name):
+                    cog_commands[cog_name].append(f"  └ `.{sub.qualified_name}`")
+
+        cog_emojis = {
+            "AdminCog": "🔧",
+            "ExchangeCog": "💱",
+            "TicketsCog": "🎫",
+            "DoneCog": "✅",
+            "ProfileCog": "👤",
+            "SetupCog": "⚙️",
+            "WalletCog": "💳",
+            "PanelCog": "🖼️",
+        }
+
+        for cog_name, cmds in cog_commands.items():
+            emoji = cog_emojis.get(cog_name, "📌")
+            embed.add_field(
+                name=f"{emoji} {cog_name.replace('Cog', '')}",
+                value="\n".join(cmds),
+                inline=False
+            )
+
+        total = sum(len(v) for v in cog_commands.values())
+        embed.set_footer(text=f"Cipher Labs • {total} commands total")
+        await ctx.send(embed=embed)
+
     @commands.group(name="admin", invoke_without_command=True)
     async def admin_cmd(self, ctx: commands.Context):
         await ctx.send("Usage: `.admin tickets`, `.admin resetcounter`, `.admin forceclose #channel`")
