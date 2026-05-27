@@ -193,6 +193,12 @@ class Database:
             await db.execute("DELETE FROM panels WHERE id = ?", (panel_id,))
             await db.commit()
 
+    async def update_panel(self, panel_id: int, **kwargs):
+        async with aiosqlite.connect(self.db_path) as db:
+            for key, value in kwargs.items():
+                await db.execute(f"UPDATE panels SET {key} = ? WHERE id = ?", (value, panel_id))
+            await db.commit()
+
     # --- Tickets ---
     async def create_ticket(self, guild_id: int, channel_id: int, user_id: int, category: str, ticket_number: int, deal_amount_usd: float = None, deal_amount_inr: float = None) -> int:
         async with aiosqlite.connect(self.db_path) as db:

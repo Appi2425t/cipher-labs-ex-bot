@@ -374,6 +374,22 @@ class PanelCog(commands.Cog):
         )
         await ctx.send(f"✅ Panel sent to {channel.mention}")
 
+    @panel.command(name="edit")
+    async def panel_edit(self, ctx: commands.Context, panel_id: int):
+        """Edit an existing panel. Usage: .panel edit <id>"""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+        panel = await self.bot.db.get_panel(panel_id)
+        if not panel or panel["guild_id"] != ctx.guild.id:
+            await ctx.send("❌ Panel not found.")
+            return
+        await ctx.send(
+            f"Editing panel **#{panel_id}** ({panel['panel_type']}). Click below to open the editor.",
+            view=EditPanelButtonView(self.bot, panel)
+        )
+
 
 class CreateExchangeButtonView(ui.View):
     def __init__(self, bot):
@@ -393,6 +409,83 @@ class CreateSupportButtonView(ui.View):
     @ui.button(label="Create Support Panel", style=discord.ButtonStyle.green)
     async def create_btn(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_modal(CreateSupportPanelModal(self.bot))
+
+
+class EditPanelButtonView(ui.View):
+    def __init__(self, bot, panel):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.panel = panel
+
+    @ui.button(label="Edit Panel", style=discord.ButtonStyle.blurple, emoji="✏️")
+    async def edit_btn(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(EditPanelModal(self.bot, self.panel))
+
+
+class EditPanelModal(ui.Modal, title="✏️ Edit Panel"):
+    def __init__(self, bot, panel):
+        super().__init__()
+        self.bot = bot
+        self.panel = panel
+        self.panel_title_input = ui.TextInput(
+            label="Panel Title",
+            default=panel.get("title") or "",
+            required=True
+        )
+        self.description_input = ui.TextInput(
+            label="Description",
+            style=discord.TextStyle.paragraph,
+            default=panel.get("description") or "",
+            required=True
+        )
+        self.color_input = ui.TextInput(
+            label="Color (hex)",
+            default=f"#{panel.get('color', 3447003):06x}",
+            required=False
+        )
+        self.footer_input = ui.TextInput(
+            label="Footer Text",
+            default=panel.get("footer") or "",
+            required=False
+        )
+        self.add_item(self.panel_title_input)
+        self.add_item(self.description_input)
+        self.add_item(self.color_input)
+        self.add_item(self.footer_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from utils import hex_to_int
+        new_title = self.panel_title_input.value
+        new_desc = self.description_input.value
+        new_color = hex_to_int(self.color_input.value) if self.color_input.value else self.panel.get("color", 3447003)
+        new_footer = self.footer_input.value
+
+        # Update the panel message
+        try:
+            channel = interaction.guild.get_channel(self.panel["channel_id"])
+            if channel:
+                msg = await channel.fetch_message(self.panel["message_id"])
+                embed = discord.Embed(
+                    title=new_title,
+                    description=new_desc,
+                    color=new_color
+                )
+                if new_footer:
+                    embed.set_footer(text=new_footer)
+                await msg.edit(embed=embed)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ Could not edit the message: {e}", ephemeral=True)
+            return
+
+        # Update DB
+        await self.bot.db.update_panel(
+            self.panel["id"],
+            title=new_title,
+            description=new_desc,
+            color=new_color,
+            footer=new_footer
+        )
+        await interaction.response.send_message("✅ Panel updated successfully!", ephemeral=True)
 
 
 async def setup(bot):
