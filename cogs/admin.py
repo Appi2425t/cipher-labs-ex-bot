@@ -244,6 +244,161 @@ class AdminCog(commands.Cog):
         await close_ticket_logic(self.bot, channel, ctx.author, ticket, config)
         await ctx.send(f"✅ Force closed ticket in {channel.name}.")
 
+    @commands.command(name="setdetails")
+    async def setdetails(self, ctx: commands.Context, member: discord.Member = None):
+        """Set exchanger KYC details. Admin only. Usage: .setdetails @user"""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+        if not member:
+            await ctx.send("❌ Usage: `.setdetails @user`\nThen follow the prompts to enter details and upload documents.")
+            return
+
+        # Start collection process
+        await ctx.send(
+            f"📋 **Setting KYC details for {member.mention}**\n\n"
+            f"Please provide the following in your **next message**:\n"
+            f"```\n"
+            f"Real Name: <full name>\n"
+            f"Address: <full address>\n"
+            f"```\n"
+            f"Type the info exactly like above, or type `cancel` to abort."
+        )
+
+        def check_msg(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+
+        # Step 1: Get name and address
+        try:
+            msg = await self.bot.wait_for("message", check=check_msg, timeout=120)
+        except Exception:
+            await ctx.send("❌ Timed out. Please try again.")
+            return
+
+        if msg.content.lower() == "cancel":
+            await ctx.send("❌ Cancelled.")
+            return
+
+        # Parse name and address
+        lines = msg.content.strip().split("\n")
+        real_name = ""
+        address = ""
+        for line in lines:
+            if line.lower().startswith("real name:"):
+                real_name = line.split(":", 1)[1].strip()
+            elif line.lower().startswith("address:"):
+                address = line.split(":", 1)[1].strip()
+
+        if not real_name or not address:
+            await ctx.send("❌ Could not parse name/address. Make sure to use the format:\n```\nReal Name: John Doe\nAddress: 123 Street, City\n```")
+            return
+
+        # Step 2: Get Aadhar image
+        await ctx.send(f"✅ Got name & address.\n\n📎 Now **upload the Aadhar card image** (attach image in your next message), or type `skip` to skip.")
+
+        try:
+            msg2 = await self.bot.wait_for("message", check=check_msg, timeout=120)
+        except Exception:
+            await ctx.send("❌ Timed out. Please try again.")
+            return
+
+        aadhar_url = ""
+        if msg2.content.lower() == "skip":
+            aadhar_url = "Not provided"
+        elif msg2.attachments:
+            aadhar_url = msg2.attachments[0].url
+        else:
+            await ctx.send("❌ No image attached. Please try again with `.setdetails @user`")
+            return
+
+        # Step 3: Get PAN image
+        await ctx.send(f"✅ Aadhar saved.\n\n📎 Now **upload the PAN card image** (attach image in your next message), or type `skip` to skip.")
+
+        try:
+            msg3 = await self.bot.wait_for("message", check=check_msg, timeout=120)
+        except Exception:
+            await ctx.send("❌ Timed out. Please try again.")
+            return
+
+        pan_url = ""
+        if msg3.content.lower() == "skip":
+            pan_url = "Not provided"
+        elif msg3.attachments:
+            pan_url = msg3.attachments[0].url
+        else:
+            await ctx.send("❌ No image attached. Please try again with `.setdetails @user`")
+            return
+
+        # Save to DB
+        await self.bot.db.set_exchanger_details(
+            ctx.guild.id, member.id, real_name, address, aadhar_url, pan_url, ctx.author.id
+        )
+
+        # Confirmation embed
+        embed = discord.Embed(
+            title="✅ Exchanger KYC Details Saved",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Exchanger", value=member.mention, inline=True)
+        embed.add_field(name="Verified By", value=ctx.author.mention, inline=True)
+        embed.add_field(name="Real Name", value=real_name, inline=False)
+        embed.add_field(name="Address", value=address, inline=False)
+        if aadhar_url and aadhar_url != "Not provided":
+            embed.add_field(name="Aadhar", value=f"[View Image]({aadhar_url})", inline=True)
+        else:
+            embed.add_field(name="Aadhar", value="Not provided", inline=True)
+        if pan_url and pan_url != "Not provided":
+            embed.add_field(name="PAN", value=f"[View Image]({pan_url})", inline=True)
+        else:
+            embed.add_field(name="PAN", value="Not provided", inline=True)
+        embed.set_footer(text="Cipher Labs • KYC Verification")
+        await ctx.send(embed=embed)
+
+    @commands.command(name="viewdetails")
+    async def viewdetails(self, ctx: commands.Context, member: discord.Member = None):
+        """View exchanger KYC details. Admin only. Usage: .viewdetails @user"""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+        if not member:
+            await ctx.send("❌ Usage: `.viewdetails @user`")
+            return
+
+        details = await self.bot.db.get_exchanger_details(ctx.guild.id, member.id)
+        if not details:
+            await ctx.send(f"❌ No KYC details found for {member.mention}.")
+            return
+
+        embed = discord.Embed(
+            title=f"🔒 KYC Details — {member.display_name}",
+            color=discord.Color.orange()
+        )
+        embed.add_field(name="Real Name", value=details.get("real_name", "N/A"), inline=False)
+        embed.add_field(name="Address", value=details.get("address", "N/A"), inline=False)
+
+        aadhar_url = details.get("aadhar_url", "")
+        pan_url = details.get("pan_url", "")
+
+        if aadhar_url and aadhar_url != "Not provided":
+            embed.add_field(name="Aadhar Card", value=f"[View Image]({aadhar_url})", inline=True)
+            embed.set_image(url=aadhar_url)
+        else:
+            embed.add_field(name="Aadhar Card", value="Not provided", inline=True)
+
+        if pan_url and pan_url != "Not provided":
+            embed.add_field(name="PAN Card", value=f"[View Image]({pan_url})", inline=True)
+        else:
+            embed.add_field(name="PAN Card", value="Not provided", inline=True)
+
+        verified_by = details.get("verified_by")
+        verified_at = details.get("verified_at", "Unknown")
+        embed.add_field(name="Verified By", value=f"<@{verified_by}>" if verified_by else "N/A", inline=True)
+        embed.add_field(name="Verified At", value=str(verified_at), inline=True)
+        embed.set_footer(text="Cipher Labs • KYC Verification • Admin Only")
+        await ctx.send(embed=embed)
+
 
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))

@@ -118,6 +118,19 @@ class Database:
                     PRIMARY KEY (guild_id, user_id)
                 )
             """)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS exchanger_details (
+                    guild_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    real_name TEXT,
+                    address TEXT,
+                    aadhar_url TEXT,
+                    pan_url TEXT,
+                    verified_by INTEGER,
+                    verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (guild_id, user_id)
+                )
+            """)
             await db.commit()
 
     async def _connect(self):
@@ -359,5 +372,30 @@ class Database:
                     VALUES (?, ?, ?)
                     ON CONFLICT(guild_id, user_id) DO UPDATE SET {field} = ?""",
                 (guild_id, user_id, value, value)
+            )
+            await db.commit()
+
+    # --- Exchanger Details ---
+    async def get_exchanger_details(self, guild_id: int, user_id: int) -> dict:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM exchanger_details WHERE guild_id = ? AND user_id = ?",
+                (guild_id, user_id)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    async def set_exchanger_details(self, guild_id: int, user_id: int, real_name: str, address: str, aadhar_url: str, pan_url: str, verified_by: int):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO exchanger_details (guild_id, user_id, real_name, address, aadhar_url, pan_url, verified_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(guild_id, user_id) DO UPDATE SET
+                   real_name = ?, address = ?, aadhar_url = ?, pan_url = ?, verified_by = ?, verified_at = CURRENT_TIMESTAMP""",
+                (guild_id, user_id, real_name, address, aadhar_url, pan_url, verified_by,
+                 real_name, address, aadhar_url, pan_url, verified_by)
             )
             await db.commit()
