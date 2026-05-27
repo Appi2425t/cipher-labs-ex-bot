@@ -89,6 +89,28 @@ class ExchangeCog(commands.Cog):
         embed.set_footer(text="Cipher Labs")
         await ctx.send(embed=embed)
 
+    @commands.command(name="calc")
+    async def calc(self, ctx: commands.Context, direction: str = None, amount: str = None):
+        """Universal calculator. Usage: .calc i2c 5000 OR .calc c2i 50"""
+        if not direction or not amount:
+            await ctx.send(
+                "**📐 Calculator Usage:**\n"
+                "`.calc i2c <INR>` — Calculate INR → Crypto\n"
+                "`.calc c2i <USD>` — Calculate Crypto → INR\n\n"
+                "**Shortcuts:**\n"
+                "`.i2c <INR>` — Same as .calc i2c\n"
+                "`.c2i <USD>` — Same as .calc c2i"
+            )
+            return
+
+        direction = direction.lower()
+        if direction == "i2c":
+            await self.i2c(ctx, amount)
+        elif direction == "c2i":
+            await self.c2i(ctx, amount)
+        else:
+            await ctx.send("❌ Invalid type. Use `i2c` or `c2i`.\nExample: `.calc i2c 5000` or `.calc c2i 50`")
+
 
 async def setup(bot):
     await bot.add_cog(ExchangeCog(bot))

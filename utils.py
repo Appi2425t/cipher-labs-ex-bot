@@ -100,7 +100,7 @@ def hex_to_int(hex_str: str) -> int:
     return int(hex_str, 16)
 
 
-def build_ticket_embed(category: str, user: discord.Member, ticket_number: int, claimed_by=None, modal_answers: dict = None) -> discord.Embed:
+def build_ticket_embed(category: str, user: discord.Member, ticket_number: int, claimed_by=None, modal_answers: dict = None, deal_amount_usd: float = None, deal_amount_inr: float = None, config: dict = None) -> discord.Embed:
     info = get_category_info(category)
     embed = discord.Embed(
         title=f"{info['emoji']} {info['label']} — Ticket #{ticket_number:04d}",
@@ -119,6 +119,34 @@ def build_ticket_embed(category: str, user: discord.Member, ticket_number: int, 
     if modal_answers:
         details = "\n".join(f"**{k}:** {v}" for k, v in modal_answers.items())
         embed.add_field(name="Details", value=details, inline=False)
+
+    # Show calculated exchange amounts
+    if category == "i2c" and deal_amount_inr and deal_amount_usd:
+        rate = config.get("rate_i2c", 101) if config else 101
+        embed.add_field(
+            name="💰 Exchange Calculation",
+            value=f"**Paying:** ₹{deal_amount_inr:,.2f}\n**Receiving:** ${deal_amount_usd:,.2f}\n**Rate:** ₹{rate} per $1",
+            inline=False
+        )
+    elif category == "c2i" and deal_amount_usd and deal_amount_inr:
+        if deal_amount_usd >= 100:
+            rate = config.get("rate_c2i_above", 98.5) if config else 98.5
+        else:
+            rate = config.get("rate_c2i_below", 97.5) if config else 97.5
+        embed.add_field(
+            name="💰 Exchange Calculation",
+            value=f"**Paying:** ${deal_amount_usd:,.2f}\n**Receiving:** ₹{deal_amount_inr:,.2f}\n**Rate:** ₹{rate} per $1",
+            inline=False
+        )
+    elif category == "c2c" and deal_amount_usd:
+        rate_c2c = config.get("rate_c2c", 100) if config else 100
+        fee_pct = round(100 - rate_c2c, 1)
+        receive = deal_amount_usd * (rate_c2c / 100)
+        embed.add_field(
+            name="💰 Exchange Calculation",
+            value=f"**Sending:** ${deal_amount_usd:,.2f}\n**Receiving:** ~${receive:,.2f}\n**Fee:** {fee_pct}%",
+            inline=False
+        )
 
     embed.set_footer(text=f"Cipher Labs • {info['short']}")
     return embed

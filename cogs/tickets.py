@@ -263,7 +263,8 @@ async def open_ticket(bot, interaction: discord.Interaction, category: str, moda
     )
 
     # Send pinned embed
-    embed = build_ticket_embed(category, interaction.user, ticket_number, modal_answers=modal_answers)
+    embed = build_ticket_embed(category, interaction.user, ticket_number, modal_answers=modal_answers,
+                               deal_amount_usd=deal_amount_usd, deal_amount_inr=deal_amount_inr, config=config)
     view = TicketControlView(bot)
     msg = await channel.send(embed=embed, view=view)
     await msg.pin()
