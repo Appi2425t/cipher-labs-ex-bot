@@ -268,6 +268,20 @@ async def open_ticket(bot, interaction: discord.Interaction, category: str, moda
     msg = await channel.send(embed=embed, view=view)
     await msg.pin()
 
+    # Ping exchanger/dealer roles for exchange tickets (i2c, c2i, c2c)
+    if category in ("i2c", "c2i", "c2c"):
+        ping_roles = []
+        for group in ("staff_roles", "dealer_roles"):
+            role_ids = json.loads(config.get(group, "[]"))
+            for rid in role_ids:
+                role = guild.get_role(rid)
+                if role:
+                    ping_roles.append(role.mention)
+        if ping_roles:
+            ping_msg = await channel.send(f"🔔 New exchange ticket! {' '.join(ping_roles)}")
+            # Auto-delete ping after 5 seconds to keep channel clean
+            await ping_msg.delete(delay=5)
+
     await interaction.followup.send(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
     # Log
