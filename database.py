@@ -115,6 +115,8 @@ class Database:
                     upi1 TEXT,
                     upi2 TEXT,
                     upi3 TEXT,
+                    binance_id TEXT,
+                    cwallet_id TEXT,
                     PRIMARY KEY (guild_id, user_id)
                 )
             """)
@@ -131,6 +133,23 @@ class Database:
                     PRIMARY KEY (guild_id, user_id)
                 )
             """)
+            await db.commit()
+
+        # Run migrations for existing databases
+        await self._run_migrations()
+
+    async def _run_migrations(self):
+        """Add new columns to existing tables without losing data."""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Get existing columns in user_wallets
+            cursor = await db.execute("PRAGMA table_info(user_wallets)")
+            columns = [row[1] for row in await cursor.fetchall()]
+
+            if "binance_id" not in columns:
+                await db.execute("ALTER TABLE user_wallets ADD COLUMN binance_id TEXT")
+            if "cwallet_id" not in columns:
+                await db.execute("ALTER TABLE user_wallets ADD COLUMN cwallet_id TEXT")
+
             await db.commit()
 
     async def _connect(self):
@@ -360,10 +379,10 @@ class Database:
             row = await cursor.fetchone()
             if row:
                 return dict(row)
-            return {"guild_id": guild_id, "user_id": user_id, "usdt1": None, "usdt2": None, "usdt3": None, "upi1": None, "upi2": None, "upi3": None}
+            return {"guild_id": guild_id, "user_id": user_id, "usdt1": None, "usdt2": None, "usdt3": None, "upi1": None, "upi2": None, "upi3": None, "binance_id": None, "cwallet_id": None}
 
     async def set_wallet_field(self, guild_id: int, user_id: int, field: str, value: str):
-        valid_fields = ("usdt1", "usdt2", "usdt3", "upi1", "upi2", "upi3")
+        valid_fields = ("usdt1", "usdt2", "usdt3", "upi1", "upi2", "upi3", "binance_id", "cwallet_id")
         if field not in valid_fields:
             raise ValueError(f"Invalid wallet field: {field}")
         async with aiosqlite.connect(self.db_path) as db:

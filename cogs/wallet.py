@@ -130,10 +130,12 @@ class WalletCog(commands.Cog):
         upi1 = wallet.get("upi1") or "Not set"
         upi2 = wallet.get("upi2") or "Not set"
         upi3 = wallet.get("upi3") or "Not set"
+        binance = wallet.get("binance_id") or "Not set"
+        cwallet = wallet.get("cwallet_id") or "Not set"
 
         all_empty = all(
             wallet.get(k) is None
-            for k in ("usdt1", "usdt2", "usdt3", "upi1", "upi2", "upi3")
+            for k in ("usdt1", "usdt2", "usdt3", "upi1", "upi2", "upi3", "binance_id", "cwallet_id")
         )
 
         embed = discord.Embed(
@@ -154,7 +156,58 @@ class WalletCog(commands.Cog):
                 value=f"**Slot 1:** `{upi1}`\n**Slot 2:** `{upi2}`\n**Slot 3:** `{upi3}`",
                 inline=False
             )
+            embed.add_field(
+                name="🔑 Exchange IDs",
+                value=f"**🟡 Binance:** `{binance}`\n**💎 CWallet:** `{cwallet}`",
+                inline=False
+            )
 
+        embed.set_footer(text="Cipher Labs")
+        await ctx.send(embed=embed)
+
+    # --- Binance & CWallet ID ---
+    @commands.command(name="setbinance")
+    async def setbinance(self, ctx: commands.Context, *, binance_id: str):
+        """Save your Binance ID. Usage: .setbinance <id>"""
+        await self.bot.db.set_wallet_field(ctx.guild.id, ctx.author.id, "binance_id", binance_id.strip())
+        await ctx.send("✅ Binance ID saved.")
+
+    @commands.command(name="setcwallet")
+    async def setcwallet(self, ctx: commands.Context, *, cwallet_id: str):
+        """Save your CWallet ID. Usage: .setcwallet <id>"""
+        await self.bot.db.set_wallet_field(ctx.guild.id, ctx.author.id, "cwallet_id", cwallet_id.strip())
+        await ctx.send("✅ CWallet ID saved.")
+
+    @commands.group(name="id", invoke_without_command=True)
+    async def id_cmd(self, ctx: commands.Context):
+        """View exchange IDs. Usage: .id b or .id c"""
+        await ctx.send("Usage: `.id b [@user]` — Binance ID\n`.id c [@user]` — CWallet ID")
+
+    @id_cmd.command(name="b")
+    async def id_binance(self, ctx: commands.Context, member: discord.Member = None):
+        """View Binance ID. Usage: .id b [@user]"""
+        target = member or ctx.author
+        wallet = await self.bot.db.get_wallet(ctx.guild.id, target.id)
+        binance = wallet.get("binance_id") or "Not set"
+        embed = discord.Embed(
+            title=f"🟡 Binance ID — {target.display_name}",
+            description=f"`{binance}`",
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text="Cipher Labs")
+        await ctx.send(embed=embed)
+
+    @id_cmd.command(name="c")
+    async def id_cwallet(self, ctx: commands.Context, member: discord.Member = None):
+        """View CWallet ID. Usage: .id c [@user]"""
+        target = member or ctx.author
+        wallet = await self.bot.db.get_wallet(ctx.guild.id, target.id)
+        cwallet = wallet.get("cwallet_id") or "Not set"
+        embed = discord.Embed(
+            title=f"💎 CWallet ID — {target.display_name}",
+            description=f"`{cwallet}`",
+            color=discord.Color.blue()
+        )
         embed.set_footer(text="Cipher Labs")
         await ctx.send(embed=embed)
 

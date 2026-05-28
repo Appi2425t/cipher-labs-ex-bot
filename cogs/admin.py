@@ -109,7 +109,7 @@ class AdminCog(commands.Cog):
                 "`.setusdt <address>` — Save USDT slot 1\n"
                 "`.setusdt2 <address>` — Save USDT slot 2\n"
                 "`.setusdt3 <address>` — Save USDT slot 3\n"
-                "`.usdt [@user]` — View all USDT addresses\n"
+                "`.usdt [@user]` — View USDT slot 1\n"
                 "`.usdt2 [@user]` — View USDT slot 2\n"
                 "`.usdt3 [@user]` — View USDT slot 3"
             ),
@@ -121,10 +121,22 @@ class AdminCog(commands.Cog):
                 "`.setupi <upi_id>` — Save UPI slot 1\n"
                 "`.setupi2 <upi_id>` — Save UPI slot 2\n"
                 "`.setupi3 <upi_id>` — Save UPI slot 3\n"
-                "`.upi [@user]` — View all UPI addresses\n"
+                "`.upi [@user]` — View UPI slot 1\n"
                 "`.upi2 [@user]` — View UPI slot 2\n"
                 "`.upi3 [@user]` — View UPI slot 3\n"
-                "`.wallet [@user]` — View all addresses combined"
+                "`.wallet [@user]` — View all addresses combined\n"
+                "`.link <slot> <amount>` — Generate UPI payment link\n"
+                "  └ Usage: `.link 1 500`"
+            ),
+            inline=False
+        )
+        embed2.add_field(
+            name="🔑 Exchange IDs",
+            value=(
+                "`.setbinance <id>` — Save your Binance ID\n"
+                "`.setcwallet <id>` — Save your CWallet ID\n"
+                "`.id b [@user]` — View Binance ID\n"
+                "`.id c [@user]` — View CWallet ID"
             ),
             inline=False
         )
@@ -165,7 +177,11 @@ class AdminCog(commands.Cog):
                 "`.admin tickets` — Show open ticket count\n"
                 "`.admin resetcounter` — Reset ticket counter to 0\n"
                 "`.admin forceclose #channel` — Force close a ticket\n"
-                "  └ Usage: `.admin forceclose #i2c-0001-john`"
+                "  └ Usage: `.admin forceclose #i2c-0001-john`\n"
+                "`.setdetails @user` — Set exchanger KYC details\n"
+                "  └ Usage: `.setdetails @John` (follows prompts)\n"
+                "`.viewdetails @user` — View exchanger KYC details\n"
+                "  └ Usage: `.viewdetails @John`"
             ),
             inline=False
         )
