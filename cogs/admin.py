@@ -310,45 +310,74 @@ class AdminCog(commands.Cog):
             await ctx.send("❌ Could not parse name/address. Make sure to use the format:\n```\nReal Name: John Doe\nAddress: 123 Street, City\n```")
             return
 
-        # Step 2: Get Aadhar image
-        await ctx.send(f"✅ Got name & address.\n\n📎 Now **upload the Aadhar card image** (attach image in your next message), or type `skip` to skip.")
+        # Step 2: Aadhar FRONT
+        await ctx.send("✅ Got name & address.\n\n📎 **Upload Aadhar card FRONT side** (attach image in your next message).")
 
         try:
-            msg2 = await self.bot.wait_for("message", check=check_msg, timeout=120)
+            msg2 = await self.bot.wait_for("message", check=check_msg, timeout=180)
         except Exception:
             await ctx.send("❌ Timed out. Please try again.")
             return
-
-        aadhar_url = ""
-        if msg2.content.lower() == "skip":
-            aadhar_url = "Not provided"
-        elif msg2.attachments:
-            aadhar_url = msg2.attachments[0].url
-        else:
+        if msg2.content.lower() == "cancel":
+            await ctx.send("❌ Cancelled.")
+            return
+        if not msg2.attachments:
             await ctx.send("❌ No image attached. Please try again with `.setdetails @user`")
             return
+        aadhar_front_url = msg2.attachments[0].url
 
-        # Step 3: Get PAN image
-        await ctx.send(f"✅ Aadhar saved.\n\n📎 Now **upload the PAN card image** (attach image in your next message), or type `skip` to skip.")
+        # Step 3: Aadhar BACK
+        await ctx.send("✅ Aadhar front saved.\n\n📎 **Upload Aadhar card BACK side** (attach image in your next message).")
 
         try:
-            msg3 = await self.bot.wait_for("message", check=check_msg, timeout=120)
+            msg3 = await self.bot.wait_for("message", check=check_msg, timeout=180)
         except Exception:
             await ctx.send("❌ Timed out. Please try again.")
             return
-
-        pan_url = ""
-        if msg3.content.lower() == "skip":
-            pan_url = "Not provided"
-        elif msg3.attachments:
-            pan_url = msg3.attachments[0].url
-        else:
+        if msg3.content.lower() == "cancel":
+            await ctx.send("❌ Cancelled.")
+            return
+        if not msg3.attachments:
             await ctx.send("❌ No image attached. Please try again with `.setdetails @user`")
             return
+        aadhar_back_url = msg3.attachments[0].url
+
+        # Step 4: PAN FRONT
+        await ctx.send("✅ Aadhar back saved.\n\n📎 **Upload PAN card FRONT side** (attach image in your next message).")
+
+        try:
+            msg4 = await self.bot.wait_for("message", check=check_msg, timeout=180)
+        except Exception:
+            await ctx.send("❌ Timed out. Please try again.")
+            return
+        if msg4.content.lower() == "cancel":
+            await ctx.send("❌ Cancelled.")
+            return
+        if not msg4.attachments:
+            await ctx.send("❌ No image attached. Please try again with `.setdetails @user`")
+            return
+        pan_front_url = msg4.attachments[0].url
+
+        # Step 5: PAN BACK
+        await ctx.send("✅ PAN front saved.\n\n📎 **Upload PAN card BACK side** (attach image in your next message).")
+
+        try:
+            msg5 = await self.bot.wait_for("message", check=check_msg, timeout=180)
+        except Exception:
+            await ctx.send("❌ Timed out. Please try again.")
+            return
+        if msg5.content.lower() == "cancel":
+            await ctx.send("❌ Cancelled.")
+            return
+        if not msg5.attachments:
+            await ctx.send("❌ No image attached. Please try again with `.setdetails @user`")
+            return
+        pan_back_url = msg5.attachments[0].url
 
         # Save to DB
         await self.bot.db.set_exchanger_details(
-            ctx.guild.id, member.id, real_name, address, aadhar_url, pan_url, ctx.author.id
+            ctx.guild.id, member.id, real_name, address,
+            aadhar_front_url, aadhar_back_url, pan_front_url, pan_back_url, ctx.author.id
         )
 
         # Confirmation embed
@@ -360,14 +389,10 @@ class AdminCog(commands.Cog):
         embed.add_field(name="Verified By", value=ctx.author.mention, inline=True)
         embed.add_field(name="Real Name", value=real_name, inline=False)
         embed.add_field(name="Address", value=address, inline=False)
-        if aadhar_url and aadhar_url != "Not provided":
-            embed.add_field(name="Aadhar", value=f"[View Image]({aadhar_url})", inline=True)
-        else:
-            embed.add_field(name="Aadhar", value="Not provided", inline=True)
-        if pan_url and pan_url != "Not provided":
-            embed.add_field(name="PAN", value=f"[View Image]({pan_url})", inline=True)
-        else:
-            embed.add_field(name="PAN", value="Not provided", inline=True)
+        embed.add_field(name="Aadhar Front", value=f"[View]({aadhar_front_url})", inline=True)
+        embed.add_field(name="Aadhar Back", value=f"[View]({aadhar_back_url})", inline=True)
+        embed.add_field(name="PAN Front", value=f"[View]({pan_front_url})", inline=True)
+        embed.add_field(name="PAN Back", value=f"[View]({pan_back_url})", inline=True)
         embed.set_footer(text="Cipher Labs • KYC Verification")
         await ctx.send(embed=embed)
 
@@ -394,19 +419,21 @@ class AdminCog(commands.Cog):
         embed.add_field(name="Real Name", value=details.get("real_name", "N/A"), inline=False)
         embed.add_field(name="Address", value=details.get("address", "N/A"), inline=False)
 
-        aadhar_url = details.get("aadhar_url", "")
-        pan_url = details.get("pan_url", "")
+        aadhar_front = details.get("aadhar_front_url") or details.get("aadhar_url", "")
+        aadhar_back = details.get("aadhar_back_url", "")
+        pan_front = details.get("pan_front_url") or details.get("pan_url", "")
+        pan_back = details.get("pan_back_url", "")
 
-        if aadhar_url and aadhar_url != "Not provided":
-            embed.add_field(name="Aadhar Card", value=f"[View Image]({aadhar_url})", inline=True)
-            embed.set_image(url=aadhar_url)
-        else:
-            embed.add_field(name="Aadhar Card", value="Not provided", inline=True)
-
-        if pan_url and pan_url != "Not provided":
-            embed.add_field(name="PAN Card", value=f"[View Image]({pan_url})", inline=True)
-        else:
-            embed.add_field(name="PAN Card", value="Not provided", inline=True)
+        embed.add_field(
+            name="📄 Aadhar Card",
+            value=f"Front: {f'[View]({aadhar_front})' if aadhar_front else 'N/A'}\nBack: {f'[View]({aadhar_back})' if aadhar_back else 'N/A'}",
+            inline=True
+        )
+        embed.add_field(
+            name="📄 PAN Card",
+            value=f"Front: {f'[View]({pan_front})' if pan_front else 'N/A'}\nBack: {f'[View]({pan_back})' if pan_back else 'N/A'}",
+            inline=True
+        )
 
         verified_by = details.get("verified_by")
         verified_at = details.get("verified_at", "Unknown")

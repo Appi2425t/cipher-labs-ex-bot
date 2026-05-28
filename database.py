@@ -126,8 +126,10 @@ class Database:
                     user_id INTEGER NOT NULL,
                     real_name TEXT,
                     address TEXT,
-                    aadhar_url TEXT,
-                    pan_url TEXT,
+                    aadhar_front_url TEXT,
+                    aadhar_back_url TEXT,
+                    pan_front_url TEXT,
+                    pan_back_url TEXT,
                     verified_by INTEGER,
                     verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (guild_id, user_id)
@@ -149,6 +151,25 @@ class Database:
                 await db.execute("ALTER TABLE user_wallets ADD COLUMN binance_id TEXT")
             if "cwallet_id" not in columns:
                 await db.execute("ALTER TABLE user_wallets ADD COLUMN cwallet_id TEXT")
+
+            # Migrate exchanger_details: old single columns to front/back
+            cursor = await db.execute("PRAGMA table_info(exchanger_details)")
+            columns = [row[1] for row in await cursor.fetchall()]
+
+            if "aadhar_front_url" not in columns:
+                await db.execute("ALTER TABLE exchanger_details ADD COLUMN aadhar_front_url TEXT")
+            if "aadhar_back_url" not in columns:
+                await db.execute("ALTER TABLE exchanger_details ADD COLUMN aadhar_back_url TEXT")
+            if "pan_front_url" not in columns:
+                await db.execute("ALTER TABLE exchanger_details ADD COLUMN pan_front_url TEXT")
+            if "pan_back_url" not in columns:
+                await db.execute("ALTER TABLE exchanger_details ADD COLUMN pan_back_url TEXT")
+
+            # Migrate old data if aadhar_url exists
+            if "aadhar_url" in columns:
+                await db.execute("UPDATE exchanger_details SET aadhar_front_url = aadhar_url WHERE aadhar_front_url IS NULL AND aadhar_url IS NOT NULL")
+            if "pan_url" in columns:
+                await db.execute("UPDATE exchanger_details SET pan_front_url = pan_url WHERE pan_front_url IS NULL AND pan_url IS NOT NULL")
 
             await db.commit()
 
@@ -407,14 +428,14 @@ class Database:
                 return dict(row)
             return None
 
-    async def set_exchanger_details(self, guild_id: int, user_id: int, real_name: str, address: str, aadhar_url: str, pan_url: str, verified_by: int):
+    async def set_exchanger_details(self, guild_id: int, user_id: int, real_name: str, address: str, aadhar_front_url: str, aadhar_back_url: str, pan_front_url: str, pan_back_url: str, verified_by: int):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                """INSERT INTO exchanger_details (guild_id, user_id, real_name, address, aadhar_url, pan_url, verified_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                """INSERT INTO exchanger_details (guild_id, user_id, real_name, address, aadhar_front_url, aadhar_back_url, pan_front_url, pan_back_url, verified_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(guild_id, user_id) DO UPDATE SET
-                   real_name = ?, address = ?, aadhar_url = ?, pan_url = ?, verified_by = ?, verified_at = CURRENT_TIMESTAMP""",
-                (guild_id, user_id, real_name, address, aadhar_url, pan_url, verified_by,
-                 real_name, address, aadhar_url, pan_url, verified_by)
+                   real_name = ?, address = ?, aadhar_front_url = ?, aadhar_back_url = ?, pan_front_url = ?, pan_back_url = ?, verified_by = ?, verified_at = CURRENT_TIMESTAMP""",
+                (guild_id, user_id, real_name, address, aadhar_front_url, aadhar_back_url, pan_front_url, pan_back_url, verified_by,
+                 real_name, address, aadhar_front_url, aadhar_back_url, pan_front_url, pan_back_url, verified_by)
             )
             await db.commit()
