@@ -279,9 +279,7 @@ async def open_ticket(bot, interaction: discord.Interaction, category: str, moda
                 if role:
                     ping_roles.append(role.mention)
         if ping_roles:
-            ping_msg = await channel.send(f"🔔 New exchange ticket! {' '.join(ping_roles)}")
-            # Auto-delete ping after 5 seconds to keep channel clean
-            await ping_msg.delete(delay=5)
+            await channel.send(f"🔔 New exchange ticket! {' '.join(ping_roles)}")
 
     await interaction.followup.send(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
