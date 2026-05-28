@@ -25,23 +25,14 @@ class WalletCog(commands.Cog):
     # --- USDT View Commands ---
     @commands.command(name="usdt")
     async def usdt(self, ctx: commands.Context, member: discord.Member = None):
-        if member:
-            wallet = await self.bot.db.get_wallet(ctx.guild.id, member.id)
-            addr = wallet.get("usdt1") or "Not set"
-            embed = discord.Embed(
-                title=f"💳 USDT Address — {member.display_name}",
-                description=f"**Slot 1:** `{addr}`",
-                color=discord.Color.blue()
-            )
-        else:
-            wallet = await self.bot.db.get_wallet(ctx.guild.id, ctx.author.id)
-            embed = discord.Embed(
-                title="💳 Your USDT Addresses",
-                color=discord.Color.blue()
-            )
-            embed.add_field(name="Slot 1", value=f"`{wallet.get('usdt1') or 'Not set'}`", inline=False)
-            embed.add_field(name="Slot 2", value=f"`{wallet.get('usdt2') or 'Not set'}`", inline=False)
-            embed.add_field(name="Slot 3", value=f"`{wallet.get('usdt3') or 'Not set'}`", inline=False)
+        target = member or ctx.author
+        wallet = await self.bot.db.get_wallet(ctx.guild.id, target.id)
+        addr = wallet.get("usdt1") or "Not set"
+        embed = discord.Embed(
+            title=f"💳 USDT Slot 1 — {target.display_name}",
+            description=f"`{addr}`",
+            color=discord.Color.blue()
+        )
         embed.set_footer(text="Cipher Labs")
         await ctx.send(embed=embed)
 
@@ -90,23 +81,14 @@ class WalletCog(commands.Cog):
     # --- UPI View Commands ---
     @commands.command(name="upi")
     async def upi(self, ctx: commands.Context, member: discord.Member = None):
-        if member:
-            wallet = await self.bot.db.get_wallet(ctx.guild.id, member.id)
-            addr = wallet.get("upi1") or "Not set"
-            embed = discord.Embed(
-                title=f"📱 UPI Address — {member.display_name}",
-                description=f"**Slot 1:** `{addr}`",
-                color=discord.Color.green()
-            )
-        else:
-            wallet = await self.bot.db.get_wallet(ctx.guild.id, ctx.author.id)
-            embed = discord.Embed(
-                title="📱 Your UPI Addresses",
-                color=discord.Color.green()
-            )
-            embed.add_field(name="Slot 1", value=f"`{wallet.get('upi1') or 'Not set'}`", inline=False)
-            embed.add_field(name="Slot 2", value=f"`{wallet.get('upi2') or 'Not set'}`", inline=False)
-            embed.add_field(name="Slot 3", value=f"`{wallet.get('upi3') or 'Not set'}`", inline=False)
+        target = member or ctx.author
+        wallet = await self.bot.db.get_wallet(ctx.guild.id, target.id)
+        addr = wallet.get("upi1") or "Not set"
+        embed = discord.Embed(
+            title=f"📱 UPI Slot 1 — {target.display_name}",
+            description=f"`{addr}`",
+            color=discord.Color.green()
+        )
         embed.set_footer(text="Cipher Labs")
         await ctx.send(embed=embed)
 
@@ -174,6 +156,54 @@ class WalletCog(commands.Cog):
             )
 
         embed.set_footer(text="Cipher Labs")
+        await ctx.send(embed=embed)
+
+    # --- UPI Payment Link ---
+    @commands.command(name="link")
+    async def link(self, ctx: commands.Context, slot: str = None, amount: str = None):
+        """Generate a UPI payment link. Usage: .link <slot 1/2/3> <amount>"""
+        if not slot or not amount:
+            await ctx.send("❌ Usage: `.link <slot> <amount>`\nExample: `.link 1 500` — generates payment link for your UPI slot 1 with ₹500")
+            return
+
+        # Validate slot
+        slot = slot.strip()
+        if slot not in ("1", "2", "3"):
+            await ctx.send("❌ Invalid slot. Use `1`, `2`, or `3`.")
+            return
+
+        # Validate amount
+        try:
+            amt = float(amount.replace(",", "").replace("₹", ""))
+            if amt <= 0:
+                raise ValueError
+        except ValueError:
+            await ctx.send("❌ Invalid amount. Use a number like `500` or `1000`.")
+            return
+
+        # Get UPI ID from wallet
+        field = f"upi{slot}"
+        wallet = await self.bot.db.get_wallet(ctx.guild.id, ctx.author.id)
+        upi_id = wallet.get(field)
+
+        if not upi_id:
+            await ctx.send(f"❌ You don't have a UPI address saved in slot {slot}. Use `.setupi{'2' if slot == '2' else '3' if slot == '3' else ''} <upi_id>` to save one.")
+            return
+
+        # Generate UPI payment link
+        # Standard UPI deep link format
+        upi_link = f"upi://pay?pa={upi_id}&am={amt:.2f}&cu=INR"
+
+        embed = discord.Embed(
+            title="📱 UPI Payment Link Generated",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="UPI ID", value=f"`{upi_id}`", inline=True)
+        embed.add_field(name="Amount", value=f"₹{amt:,.2f}", inline=True)
+        embed.add_field(name="Slot", value=f"#{slot}", inline=True)
+        embed.add_field(name="Payment Link", value=f"```\n{upi_link}\n```", inline=False)
+        embed.add_field(name="Quick Pay", value=f"[Click to Pay]({upi_link})", inline=False)
+        embed.set_footer(text="Cipher Labs • Share this link to receive payment")
         await ctx.send(embed=embed)
 
 
