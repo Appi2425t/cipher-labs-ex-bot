@@ -2,7 +2,110 @@ import discord
 from discord.ext import commands
 from utils import has_admin_or_mod, has_admin_role, generate_html_transcript
 from cogs.tickets import close_ticket_logic
+import asyncio
 import io
+import subprocess
+import sys
+import os
+
+
+ROLE_DUMP = [
+    # (name, hex_color, permissions_object, hoist, mentionable)
+    # Defined lowest → highest; bot reverses so highest is created last
+    (
+        ".gg/auraxchange", 0x3498DB,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "CC", 0x2ECC71,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "Crypto exchanger", 0x95A5A6,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "Inr exchanger", 0x95A5A6,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "Verified user", 0x9B59B6,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~Ex Client", 0xF1C40F,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~ Special Peeps", 0xE74C3C,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~ Newbie Client ( 50$+ ) ~", 0xB8860B,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~ Exchanger", 0x1ABC9C,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~Tr Exchanger", 0xF1C40F,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~Sr Exchanger", 0xE67E22,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~ Head Exchanger", 0xFF69B4,
+        discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, add_reactions=True, use_application_commands=True),
+        False, False,
+    ),
+    (
+        "~ JR.MODERATOR", 0x3498DB,
+        discord.Permissions(kick_members=True, manage_messages=True, mute_members=True, view_audit_log=True),
+        True, False,
+    ),
+    (
+        "~ SR.MODERATOR", 0xE74C3C,
+        discord.Permissions(kick_members=True, ban_members=True, manage_messages=True, mute_members=True, deafen_members=True, move_members=True, manage_channels=True, view_audit_log=True),
+        True, False,
+    ),
+    (
+        "~ M A N A G E R", 0x2ECC71,
+        discord.Permissions(administrator=True),
+        True, False,
+    ),
+]
+
+CHANNEL_DUMP = [
+    # (category_name, channel_name, topic, readonly, locked, open)
+    # Category None = top-level (no category)
+    (None, "discord-titanxch", "discord.gg/titanxch", True, False, False),
+    (None, "telegram-titanexc", "t.me/titanexc", True, False, False),
+    ("Important", "tos", "📜 Terms of Service", True, True, False),
+    ("Important", "announcements", "📢 Announcements", True, True, False),
+    ("Important", "giveaways", "🎉 Giveaways", True, True, False),
+    ("Important", "apply", "🎫 Apply", False, True, False),
+    ("Important", "recovery", "🌿 Recovery", False, True, False),
+    ("Important", "support", "🎟️ Support", False, True, False),
+    ("Exchange", "exchange", "💵 Exchange", False, True, False),
+    ("Exchange", "cash-exchange", "💴 Cash Exchange", False, True, False),
+    ("Legitmacy", "exchange-logs", "📋 Exchange Logs", True, True, False),
+    ("Chat Area", "general-chat", "💬 General Chat", False, False, True),
+    ("Chat Area", "bot-cmds", "🤖 Bot Commands", False, False, True),
+]
 
 
 class AdminCog(commands.Cog):
@@ -37,12 +140,12 @@ class AdminCog(commands.Cog):
         )
         embed.add_field(
             name="⚙️ Setup (Admin)",
-            value="`.setup` — View config\n`.setup transcript #ch` — Set transcript channel\n`.setup logs #ch` — Set log channel\n`.setup vouchchannel #ch` — Set vouch channel\n`.setup category <name>` — Set ticket category\n`.setup addrole <group> @role` — Add role to group\n`.setup removerole <group> @role` — Remove role\n`.setup prefix <p>` — Change prefix\n`.setrate <rate>` — Override USD/INR rate\n`.setexchangerate <type> <rate>` — Set exchange rate\n`.setlimit @user <USD>` — Set deal limit",
+            value="`.setup` — View config\n`.setup transcript #ch` — Set transcript channel\n`.setup logs #ch` — Set log channel\n`.setup vouchchannel #ch` — Set vouch channel\n`.setup category <name>` — Set ticket category\n`.setup addrole <group> @role` — Add role to group\n`.setup removerole <group> @role` — Remove role\n`.setup prefix <p>` — Change prefix\n`.setrate <rate>` — Override USD/INR rate\n`.setexchangerate <type> <rate>` — Set exchange rate\n`.setlimit @user <USD>` — Set deal limit\n`.roledump` — Create all 15 server roles at once",
             inline=False
         )
         embed.add_field(
             name="🔧 Admin",
-            value="`.admin tickets` — Open ticket count\n`.admin resetcounter` — Reset ticket counter\n`.admin forceclose #channel` — Force close ticket\n`.panel create-exchange` — Create exchange panel\n`.panel create-support` — Create support panel\n`.panel list` — List panels\n`.panel delete <id>` — Delete panel\n`.panel send <id> #ch` — Re-send panel",
+            value="`.admin tickets` — Open ticket count\n`.admin resetcounter` — Reset ticket counter\n`.admin forceclose #channel` — Force close ticket\n`.roledump` — Create all 15 server roles\n`.channeldump` — Create all channels & categories\n`.update` — Pull git & restart bot\n`.panel create-exchange` — Create exchange panel\n`.panel create-support` — Create support panel\n`.panel list` — List panels\n`.panel delete <id>` — Delete panel\n`.panel send <id> #ch` — Re-send panel",
             inline=False
         )
         embed.set_footer(text="Cipher Labs")
@@ -181,7 +284,10 @@ class AdminCog(commands.Cog):
                 "`.setdetails @user` — Set exchanger KYC details\n"
                 "  └ Usage: `.setdetails @John` (follows prompts)\n"
                 "`.viewdetails @user` — View exchanger KYC details\n"
-                "  └ Usage: `.viewdetails @John`"
+                "  └ Usage: `.viewdetails @John`\n"
+                "`.roledump` — Create all 15 server roles at once\n"
+                "`.channeldump` — Create all channels & categories\n"
+                "`.update` — Pull git changes & restart bot"
             ),
             inline=False
         )
@@ -441,6 +547,189 @@ class AdminCog(commands.Cog):
         embed.add_field(name="Verified At", value=str(verified_at), inline=True)
         embed.set_footer(text="Cipher Labs • KYC Verification • Admin Only")
         await ctx.send(embed=embed)
+
+    @commands.command(name="roledump")
+    @commands.has_permissions(manage_roles=True)
+    async def roledump(self, ctx: commands.Context):
+        """Create all 15 server roles with correct colors and permissions. Admin only."""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+
+        msg = await ctx.send("⏳ Creating roles...")
+
+        existing_roles = [r.name for r in ctx.guild.roles]
+        created, skipped, failed = 0, 0, 0
+
+        for name, color, perms, hoist, mentionable in reversed(ROLE_DUMP):
+            if name in existing_roles:
+                skipped += 1
+                continue
+            try:
+                await ctx.guild.create_role(
+                    name=name,
+                    color=discord.Color(color),
+                    permissions=perms,
+                    hoist=hoist,
+                    mentionable=mentionable,
+                    reason=f"Role dump by {ctx.author}",
+                )
+                created += 1
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                failed += 1
+                print(f"[ROLEDUMP] Failed to create {name}: {e}")
+
+        embed = discord.Embed(
+            title="🎉 Role Dump Complete",
+            color=discord.Color.green(),
+            description=(
+                f"✅ Created: **{created}**\n"
+                f"⏭️ Skipped: **{skipped}** (already exist)\n"
+                f"❌ Failed: **{failed}**"
+            ),
+        )
+        embed.set_footer(text="Cipher Labs • Role Dump")
+        await msg.edit(content=None, embed=embed)
+
+    @commands.command(name="channeldump")
+    @commands.has_permissions(manage_channels=True)
+    async def channeldump(self, ctx: commands.Context):
+        """Create all server categories and channels with correct permissions. Admin only."""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+
+        msg = await ctx.send("⏳ Creating channels...")
+
+        everyone = ctx.guild.default_role
+
+        # Role lookups for permission overwrites
+        role_names = {
+            "~ M A N A G E R": None,
+            "~ SR.MODERATOR": None,
+            "~ JR.MODERATOR": None,
+        }
+        for r in ctx.guild.roles:
+            if r.name in role_names:
+                role_names[r.name] = r
+
+        existing_categories = {c.name: c for c in ctx.guild.categories}
+        existing_channels = {c.name for c in ctx.guild.channels}
+
+        cat_created, cat_skipped = 0, 0
+        ch_created, ch_skipped, ch_failed = 0, 0, 0
+
+        for cat_name, ch_name, topic, readonly, locked, open_ch in CHANNEL_DUMP:
+            # Create or find category
+            category = None
+            if cat_name:
+                if cat_name in existing_categories:
+                    category = existing_categories[cat_name]
+                else:
+                    category = await ctx.guild.create_category(
+                        cat_name, reason="Channel dump"
+                    )
+                    existing_categories[cat_name] = category
+                    cat_created += 1
+                    await asyncio.sleep(0.5)
+
+            # Skip if channel already exists
+            if ch_name in existing_channels:
+                ch_skipped += 1
+                continue
+
+            # Build permission overwrites
+            overwrites = {
+                everyone: discord.PermissionOverwrite(
+                    view_channel=not locked,
+                    send_messages=open_ch and not readonly,
+                    read_messages=not locked,
+                    read_message_history=True,
+                )
+            }
+
+            # Add staff role overrides for locked channels
+            if locked:
+                for role_name, role in role_names.items():
+                    if role:
+                        overwrites[role] = discord.PermissionOverwrite(
+                            view_channel=True,
+                            send_messages=True,
+                            read_messages=True,
+                            read_message_history=True,
+                        )
+
+            try:
+                display_name = f"{'🔒 ' if locked else ''}{'📌 ' if readonly and not locked else ''}{ch_name}"
+                await ctx.guild.create_text_channel(
+                    name=ch_name,
+                    category=category,
+                    overwrites=overwrites,
+                    topic=topic,
+                    reason=f"Channel dump by {ctx.author}",
+                )
+                ch_created += 1
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                ch_failed += 1
+                print(f"[CHANNELDUMP] Failed to create {ch_name}: {e}")
+
+        embed = discord.Embed(
+            title="🎉 Channel Dump Complete",
+            color=discord.Color.blue(),
+            description=(
+                f"📁 Categories: **{cat_created}** created, **{cat_skipped}** skipped\n"
+                f"✅ Channels: **{ch_created}** created\n"
+                f"⏭️ Skipped: **{ch_skipped}** (already exist)\n"
+                f"❌ Failed: **{ch_failed}**"
+            ),
+        )
+        embed.set_footer(text="Cipher Labs • Channel Dump")
+        await msg.edit(content=None, embed=embed)
+
+    @commands.command(name="update")
+    @commands.has_permissions(administrator=True)
+    async def update(self, ctx: commands.Context):
+        """Pull latest code from git and restart the bot. Admin only."""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+
+        msg = await ctx.send("🔄 Pulling latest changes...")
+
+        try:
+            result = subprocess.run(
+                ["git", "pull"],
+                capture_output=True, text=True, cwd=os.getcwd(), timeout=30
+            )
+            pull_output = result.stdout.strip() or result.stderr.strip()
+        except FileNotFoundError:
+            await msg.edit(content="❌ Git is not installed on this system.")
+            return
+        except subprocess.TimeoutExpired:
+            await msg.edit(content="❌ Git pull timed out.")
+            return
+
+        if "Already up to date" in pull_output or result.returncode == 0:
+            embed = discord.Embed(
+                title="🔄 Bot Update",
+                description=f"```\n{pull_output[:1800]}\n```\n\n♻️ Restarting...",
+                color=discord.Color.green() if "Already up to date" in pull_output else discord.Color.orange()
+            )
+            await msg.edit(content=None, embed=embed)
+            await asyncio.sleep(1)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        else:
+            embed = discord.Embed(
+                title="❌ Update Failed",
+                description=f"```\n{pull_output[:1800]}\n```",
+                color=discord.Color.red()
+            )
+            await msg.edit(content=None, embed=embed)
 
 
 async def setup(bot):
