@@ -6,7 +6,15 @@ import signal
 import argparse
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.resolve()
+def find_git_root(start):
+    current = start.resolve()
+    while current != current.parent:
+        if (current / ".git").exists():
+            return current
+        current = current.parent
+    return start.resolve()
+
+PROJECT_ROOT = find_git_root(Path(__file__).parent)
 PID_FILE = PROJECT_ROOT / "bot.pid"
 
 GREEN = "\033[92m"
