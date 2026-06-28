@@ -1,11 +1,98 @@
 import discord
 from discord.ext import commands
 from utils import is_exchanger_role
+from datetime import datetime
 
 
 class ProfileCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(name="p")
+    async def p(self, ctx: commands.Context, member: discord.Member = None):
+        """Quick profile — total exchanges, last exchange, status."""
+        member = member or ctx.author
+        guild_id = ctx.guild.id
+
+        stats = await self.bot.db.get_user_stats(guild_id, member.id)
+        deal_count = await self.bot.db.get_deal_count(guild_id, member.id)
+        last_deal = await self.bot.db.get_last_deal(guild_id, member.id)
+        limit_data = await self.bot.db.get_limit(guild_id, member.id)
+
+        exchanger_stats = None
+        client_stats = None
+        for s in stats:
+            if s["role"] == "exchanger":
+                exchanger_stats = s
+            elif s["role"] == "client":
+                client_stats = s
+
+        if exchanger_stats and client_stats:
+            status = "Both"
+        elif exchanger_stats:
+            status = "Exchanger"
+        elif client_stats:
+            status = "Client"
+        else:
+            status = "Member"
+
+        total_usd = (exchanger_stats["total_usd"] if exchanger_stats else 0) + (client_stats["total_usd"] if client_stats else 0)
+        total_inr = (exchanger_stats["total_inr"] if exchanger_stats else 0) + (client_stats["total_inr"] if client_stats else 0)
+
+        embed = discord.Embed(
+            title=f"👤 {member.display_name}",
+            color=member.top_role.color if member.top_role.color != discord.Color.default() else discord.Color.blue()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        embed.add_field(name="Status", value=status, inline=True)
+        embed.add_field(name="ID", value=str(member.id), inline=True)
+        embed.add_field(name="Joined", value=member.joined_at.strftime("%d %b %Y") if member.joined_at else "N/A", inline=True)
+
+        embed.add_field(
+            name="💱 Exchanges",
+            value=(
+                f"Total: **{deal_count}**\n"
+                f"USD: **${total_usd:,.2f}**\n"
+                f"INR: **₹{total_inr:,.2f}**"
+            ),
+            inline=True
+        )
+
+        if last_deal:
+            ts = datetime.fromisoformat(last_deal["completed_at"]).strftime("%d %b %Y, %I:%M %p")
+            embed.add_field(
+                name="📩 Last Exchange",
+                value=(
+                    f"Pair: **{last_deal['pair']}**\n"
+                    f"Amount: **${last_deal['amount_usd']:,.2f}** / **₹{last_deal['amount_inr']:,.2f}**\n"
+                    f"Date: {ts}"
+                ),
+                inline=True
+            )
+        else:
+            embed.add_field(name="📩 Last Exchange", value="None yet", inline=True)
+
+        limit_usd = limit_data["limit_usd"]
+        used_usd = limit_data["used_usd"]
+        available = max(0, limit_usd - used_usd)
+        embed.add_field(
+            name="📈 Limit",
+            value=f"${used_usd:,.2f} / ${limit_usd:,.2f}",
+            inline=True
+        )
+
+        roles = [r.mention for r in member.roles[1:6]]
+        if len(member.roles) > 6:
+            roles.append(f"+{len(member.roles) - 6} more")
+        embed.add_field(
+            name="Roles",
+            value=", ".join(roles) if roles else "None",
+            inline=False
+        )
+
+        embed.set_footer(text="Cipher Labs")
+        await ctx.send(embed=embed)
 
     @commands.command(name="profile")
     async def profile(self, ctx: commands.Context, member: discord.Member = None):

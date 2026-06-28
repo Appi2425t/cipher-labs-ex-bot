@@ -376,6 +376,28 @@ class Database:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
+    async def get_last_deal(self, guild_id: int, user_id: int) -> dict:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT d.*, t.ticket_number FROM deals d
+                   LEFT JOIN tickets t ON d.ticket_id = t.id
+                   WHERE d.guild_id = ? AND (d.exchanger_id = ? OR d.client_id = ?)
+                   ORDER BY d.completed_at DESC LIMIT 1""",
+                (guild_id, user_id, user_id)
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def get_deal_count(self, guild_id: int, user_id: int) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM deals WHERE guild_id = ? AND (exchanger_id = ? OR client_id = ?)",
+                (guild_id, user_id, user_id)
+            )
+            row = await cursor.fetchone()
+            return row[0]
+
     async def update_user_stats(self, guild_id: int, user_id: int, role: str, amount_usd: float, amount_inr: float):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(

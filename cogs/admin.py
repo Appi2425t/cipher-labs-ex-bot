@@ -130,7 +130,7 @@ class AdminCog(commands.Cog):
         )
         embed.add_field(
             name="👤 Profile",
-            value="`.profile [@user]` — View profile & stats\n`.mylimit` — View your exchanger limit",
+            value="`.p [@user]` — Quick profile with exchange stats\n`.profile [@user]` — View full profile & stats\n`.mylimit` — View your exchanger limit",
             inline=False
         )
         embed.add_field(
@@ -145,7 +145,7 @@ class AdminCog(commands.Cog):
         )
         embed.add_field(
             name="🔧 Admin",
-            value="`.admin tickets` — Open ticket count\n`.admin resetcounter` — Reset ticket counter\n`.admin forceclose #channel` — Force close ticket\n`.roledump` — Create all 15 server roles\n`.channeldump` — Create all channels & categories\n`.update` — Pull git & restart bot\n`.panel create-exchange` — Create exchange panel\n`.panel create-support` — Create support panel\n`.panel list` — List panels\n`.panel delete <id>` — Delete panel\n`.panel send <id> #ch` — Re-send panel",
+            value="`.admin tickets` — Open ticket count\n`.admin resetcounter` — Reset ticket counter\n`.admin forceclose #channel` — Force close ticket\n`.addrole @user <role>` — Add role to user\n`.roledump` — Create all 15 server roles\n`.channeldump` — Create all channels & categories\n`.delallch` — Delete all channels (except bot-cmds)\n`.update` — Pull git & restart bot\n`.panel create-exchange` — Create exchange panel\n`.panel create-support` — Create support panel\n`.panel list` — List panels\n`.panel delete <id>` — Delete panel\n`.panel send <id> #ch` — Re-send panel",
             inline=False
         )
         embed.set_footer(text="Cipher Labs")
@@ -199,7 +199,9 @@ class AdminCog(commands.Cog):
         embed2.add_field(
             name="👤 Profile & Limits",
             value=(
-                "`.profile [@user]` — View profile & stats\n"
+                "`.p [@user]` — Quick profile with exchange stats\n"
+                "  └ Usage: `.p` or `.p @John`\n"
+                "`.profile [@user]` — View full profile & stats\n"
                 "  └ Usage: `.profile` or `.profile @John`\n"
                 "`.mylimit` — View your exchanger limit\n"
                 "  └ Shows total/used/available with bar"
@@ -285,8 +287,11 @@ class AdminCog(commands.Cog):
                 "  └ Usage: `.setdetails @John` (follows prompts)\n"
                 "`.viewdetails @user` — View exchanger KYC details\n"
                 "  └ Usage: `.viewdetails @John`\n"
+                "`.addrole @user <role>` — Add role to user\n"
+                "  └ Usage: `.addrole @John ~ Exchanger`\n"
                 "`.roledump` — Create all 15 server roles at once\n"
                 "`.channeldump` — Create all channels & categories\n"
+                "`.delallch` — Delete all channels (keeps bot-cmds)\n"
                 "`.update` — Pull git changes & restart bot"
             ),
             inline=False
@@ -693,43 +698,140 @@ class AdminCog(commands.Cog):
     @commands.command(name="update")
     @commands.has_permissions(administrator=True)
     async def update(self, ctx: commands.Context):
-        """Pull latest code from git and restart the bot. Admin only."""
+        """Pull latest code, install deps, and restart the bot. Admin only."""
         config = await self.bot.db.get_config(ctx.guild.id)
         if not has_admin_role(ctx.author, config):
             await ctx.send("❌ Admin only.")
             return
 
-        msg = await ctx.send("🔄 Pulling latest changes...")
+        msg = await ctx.send("🔄 Updating...")
+
+        update_script = os.path.join(os.getcwd(), "update.py")
+        if not os.path.exists(update_script):
+            await msg.edit(content="❌ update.py not found in project root.")
+            return
 
         try:
             result = subprocess.run(
-                ["git", "pull"],
-                capture_output=True, text=True, cwd=os.getcwd(), timeout=30
+                [sys.executable, update_script, "--no-restart"],
+                capture_output=True, text=True, cwd=os.getcwd(), timeout=120
             )
-            pull_output = result.stdout.strip() or result.stderr.strip()
-        except FileNotFoundError:
-            await msg.edit(content="❌ Git is not installed on this system.")
-            return
+            output = result.stdout.strip()
         except subprocess.TimeoutExpired:
-            await msg.edit(content="❌ Git pull timed out.")
+            await msg.edit(content="❌ Update timed out.")
             return
 
-        if "Already up to date" in pull_output or result.returncode == 0:
-            embed = discord.Embed(
-                title="🔄 Bot Update",
-                description=f"```\n{pull_output[:1800]}\n```\n\n♻️ Restarting...",
-                color=discord.Color.green() if "Already up to date" in pull_output else discord.Color.orange()
-            )
-            await msg.edit(content=None, embed=embed)
-            await asyncio.sleep(1)
-            os.execv(sys.executable, [sys.executable] + sys.argv)
-        else:
-            embed = discord.Embed(
-                title="❌ Update Failed",
-                description=f"```\n{pull_output[:1800]}\n```",
-                color=discord.Color.red()
-            )
-            await msg.edit(content=None, embed=embed)
+        embed = discord.Embed(
+            title="🔄 Bot Update",
+            description=f"```\n{output[:1800]}\n```\n\n♻️ Restarting...",
+            color=discord.Color.green() if result.returncode == 0 else discord.Color.orange()
+        )
+        await msg.edit(content=None, embed=embed)
+        await asyncio.sleep(1)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    @commands.command(name="delallch")
+    @commands.has_permissions(manage_channels=True)
+    async def delallch(self, ctx: commands.Context):
+        """Delete all channels except bot-cmds. Admin only. Requires confirmation."""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_role(ctx.author, config):
+            await ctx.send("❌ Admin only.")
+            return
+
+        channels = [ch for ch in ctx.guild.channels if ch.name != "bot-cmds"]
+        if not channels:
+            await ctx.send("❌ No channels to delete (only bot-cmds remains).")
+            return
+
+        embed = discord.Embed(
+            title="⚠️ Confirm Channel Deletion",
+            description=(
+                f"This will **delete {len(channels)} channels** and all categories.\n"
+                f"`bot-cmds` will be **preserved**.\n\n"
+                f"React with ✅ within 30s to confirm, or ❌ to cancel."
+            ),
+            color=discord.Color.red()
+        )
+        confirm_msg = await ctx.send(embed=embed)
+        await confirm_msg.add_reaction("✅")
+        await confirm_msg.add_reaction("❌")
+
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ("✅", "❌") and reaction.message.id == confirm_msg.id
+
+        try:
+            reaction, _ = await self.bot.wait_for("reaction_add", check=check, timeout=30)
+        except Exception:
+            await confirm_msg.edit(content="❌ Timed out. Cancelled.", embed=None)
+            return
+
+        if str(reaction.emoji) == "❌":
+            await confirm_msg.edit(content="❌ Cancelled.", embed=None)
+            return
+
+        msg = await ctx.send(f"⏳ Deleting {len(channels)} channels...")
+
+        deleted, failed = 0, 0
+        for ch in channels:
+            try:
+                await ch.delete(reason=f"delallch by {ctx.author}")
+                deleted += 1
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                failed += 1
+                print(f"[DELALLCH] Failed to delete {ch.name}: {e}")
+
+        result = discord.Embed(
+            title="🗑️ Channel Deletion Complete",
+            description=(
+                f"✅ Deleted: **{deleted}**\n"
+                f"❌ Failed: **{failed}**"
+            ),
+            color=discord.Color.green()
+        )
+        result.set_footer(text="Cipher Labs • Channel Cleanup")
+        await msg.edit(content=None, embed=result)
+
+    @commands.command(name="addrole")
+    @commands.has_permissions(manage_roles=True)
+    async def addrole(self, ctx: commands.Context, member: discord.Member = None, *, role_name: str = None):
+        """Add a role to a user. Usage: .addrole @user role name"""
+        config = await self.bot.db.get_config(ctx.guild.id)
+        if not has_admin_or_mod(ctx.author, config):
+            await ctx.send("❌ Admin/Mod only.")
+            return
+
+        if not member or not role_name:
+            await ctx.send("❌ Usage: `.addrole @user <role name>`")
+            return
+
+        role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
+        if not role:
+            await ctx.send(f"❌ Role `{role_name}` not found.")
+            return
+
+        if role >= ctx.author.top_role and ctx.author != ctx.guild.owner:
+            await ctx.send("❌ That role is equal to or higher than your top role.")
+            return
+
+        if role in member.roles:
+            await ctx.send(f"❌ {member.mention} already has the `{role.name}` role.")
+            return
+
+        try:
+            await member.add_roles(role, reason=f"Added by {ctx.author}")
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to assign that role. Make sure my role is above it.")
+            return
+
+        embed = discord.Embed(
+            title="✅ Role Added",
+            description=f"{member.mention} now has the **{role.name}** role.",
+            color=role.color if role.color != discord.Color.default() else discord.Color.green()
+        )
+        embed.set_footer(text=f"Added by {ctx.author}")
+        await ctx.send(embed=embed)
 
 
 async def setup(bot):
